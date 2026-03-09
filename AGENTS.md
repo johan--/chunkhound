@@ -16,6 +16,9 @@ Purpose: Transform codebases into searchable knowledge bases for AI assistants
 - ALWAYS Batch embeddings (min: 100, max: provider_limit)
 - ALWAYS Use uv for all Python operations
 - ALWAYS Update version via: `uv run scripts/update_version.py`
+- ALWAYS Use absolute paths in `.chunkhound.json` `database.path` — relative paths resolve to CWD, not the project dir, which silently indexes into the wrong DB
+- ALWAYS kill stale chunkhound/python processes holding DB locks before re-indexing (`lsof .chunkhound/db` or check the error PID)
+- ALWAYS verify the `Database:` line in ChunkHound's startup banner points to the target project's DB, not this repo's
 
 ## KEY_COMMANDS
 ```bash
@@ -78,7 +81,7 @@ uv publish
 - Default DB path: `.chunkhound/db/chunks.db` (directory structure, not flat file)
 - When using `--db` flag, pass the **directory** path (e.g. `--db .chunkhound/db`), not the full file path — passing `--db .../chunks.db` creates a nested `chunks.db/chunks.db` directory
 - Old-style flat `.chunkhound` files (pre-v4) block directory creation — move aside before re-indexing
-- Project-local `.chunkhound.json` with relative `"path": ".chunkhound"` resolves to CWD, not the project dir — use `--db` with absolute paths when indexing remote projects
+- **CRITICAL: `.chunkhound.json` `database.path` MUST be absolute** — relative `"path": ".chunkhound"` resolves to CWD, not the project dir. This silently overwrites whatever DB is at CWD. Use `"path": "/full/path/to/project/.chunkhound"`
 - `--config` does NOT override a project-local `.chunkhound.json` for DB path — always use explicit `--db` when the target project has its own config
 
 ## PROJECT_MAINTENANCE
