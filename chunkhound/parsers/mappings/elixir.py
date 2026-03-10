@@ -63,20 +63,18 @@ class ElixirMapping(BaseMapping):
     # --- BaseMapping required methods ---
 
     def get_function_query(self) -> str:
-        return """
+        return f"""
         (call
             target: (identifier) @keyword
-            (#match? @keyword
-                "^(def|defp|defmacro|defmacrop|defguard|defguardp|defdelegate)$"
-            )
+            (#match? @keyword "{_FUNCTION_KEYWORDS}")
         ) @func_def
         """
 
     def get_class_query(self) -> str:
-        return """
+        return f"""
         (call
             target: (identifier) @keyword
-            (#match? @keyword "^(defmodule|defprotocol|defimpl)$")
+            (#match? @keyword "{_MODULE_KEYWORDS}")
         ) @class_def
         """
 
@@ -124,14 +122,14 @@ class ElixirMapping(BaseMapping):
             """
 
         elif concept == UniversalConcept.COMMENT:
-            return """
+            return f"""
             (comment) @definition
 
             (unary_operator
                 operator: "@"
                 operand: (call
                     target: (identifier) @attr_name
-                    (#match? @attr_name "^(doc|moduledoc)$")
+                    (#match? @attr_name "{_DOC_ATTR_KEYWORDS}")
                 )
             ) @definition
             """
@@ -323,9 +321,27 @@ class ElixirMapping(BaseMapping):
         snake_parts = [self._to_snake_case(p) for p in parts]
         rel_path = "/".join(snake_parts) + ".ex"
 
-        # Try lib/ directory (standard Mix project structure)
-        for prefix in ["lib", ""]:
-            candidate = base_dir / prefix / rel_path if prefix else base_dir / rel_path
+        search_dirs: list[Path] = []
+
+        # Detect umbrella app structure from source_file (apps/*/lib/...)
+        try:
+            rel_source = source_file.relative_to(base_dir)
+            if len(rel_source.parts) >= 2 and rel_source.parts[0] == "apps":
+                apps_dir = base_dir / "apps"
+                if apps_dir.is_dir():
+                    for app_dir in sorted(apps_dir.iterdir()):
+                        lib_dir = app_dir / "lib"
+                        if lib_dir.is_dir():
+                            search_dirs.append(lib_dir)
+        except ValueError:
+            pass
+
+        # Standard Mix search paths (always included as fallback)
+        search_dirs.append(base_dir / "lib")
+        search_dirs.append(base_dir)
+
+        for search_dir in search_dirs:
+            candidate = search_dir / rel_path
             if candidate.exists():
                 return [candidate]
 
