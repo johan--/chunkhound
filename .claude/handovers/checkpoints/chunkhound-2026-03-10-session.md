@@ -16,3 +16,5 @@
 - **File:** DB path resolution (likely `chunkhound/core/` or provider init)
 - **Fix:** Detect when `--db` path ends in `.db` and use as file path directly instead of directory
 - **Edge case:** Old flat `.chunkhound` files (pre-v4) blocking directory creation
+
+## Archived — merged into handover 0826
