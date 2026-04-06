@@ -118,8 +118,15 @@ class MCPServerBase(ABC):
             if not self.config.database or not self.config.database.path:
                 raise ValueError("Database configuration not initialized")
 
-            db_path = Path(self.config.database.path)
-            db_path.parent.mkdir(parents=True, exist_ok=True)
+            # Resolve DB path without hard-failing on missing DB — MCP has
+            # background indexing that can create the database (#226).
+            # CLI search/research use must_exist=True instead (query-only).
+            db_path = self.config.database.get_db_path()
+            if not db_path.exists():
+                self.debug_log(
+                    f"WARNING: Database not found at {db_path}. "
+                    f"Background scan will create it, or run 'chunkhound index' first."
+                )
 
             # Initialize embedding manager
             self.embedding_manager = EmbeddingManager()
@@ -132,7 +139,8 @@ class MCPServerBase(ABC):
                     )
                     self.embedding_manager.register_provider(provider, set_default=True)
                     self.debug_log(
-                        f"Embedding provider registered: {self.config.embedding.provider}"
+                        "Embedding provider registered:"
+                        f" {self.config.embedding.provider}"
                     )
             except ValueError as e:
                 # API key or configuration issue - expected for search-only usage
@@ -141,7 +149,8 @@ class MCPServerBase(ABC):
                 # Unexpected error - log but continue
                 self.debug_log(f"Unexpected error setting up embedding provider: {e}")
 
-            # Initialize LLM manager with dual providers (optional - continue if it fails)
+            # Initialize LLM manager with dual providers
+            # (optional - continue if it fails)
             try:
                 if self.config.llm:
                     utility_config, synthesis_config = (
@@ -149,8 +158,11 @@ class MCPServerBase(ABC):
                     )
                     self.llm_manager = LLMManager(utility_config, synthesis_config)
                     self.debug_log(
-                        f"LLM providers registered: {self.config.llm.provider} "
-                        f"(utility: {utility_config['model']}, synthesis: {synthesis_config['model']})"
+                        f"LLM providers registered:"
+                        f" {self.config.llm.provider}"
+                        f" (utility: {utility_config['model']},"
+                        f" synthesis:"
+                        f" {synthesis_config['model']})"
                     )
             except ValueError as e:
                 # API key or configuration issue - expected if LLM not needed
@@ -277,7 +289,9 @@ class MCPServerBase(ABC):
             self._scan_complete = True
 
             self.debug_log(
-                f"Background scan completed: {stats.files_processed} files, {stats.chunks_created} chunks"
+                f"Background scan completed:"
+                f" {stats.files_processed} files,"
+                f" {stats.chunks_created} chunks"
             )
 
         except Exception as e:
@@ -361,8 +375,10 @@ class MCPServerBase(ABC):
         """
         if not self.embedding_manager or not self.embedding_manager.list_providers():
             raise RuntimeError(
-                "No embedding providers available. Configure an embedding provider "
-                "in .chunkhound.json or set CHUNKHOUND_EMBEDDING__API_KEY environment variable."
+                "No embedding providers available. Configure"
+                " an embedding provider in .chunkhound.json"
+                " or set CHUNKHOUND_EMBEDDING__API_KEY"
+                " environment variable."
             )
         return self.embedding_manager
 

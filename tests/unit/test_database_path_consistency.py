@@ -89,6 +89,65 @@ def test_path_property_differs_from_get_db_path(tmp_path):
     assert db_path == base_path / "chunks.db"
 
 
+def test_get_db_path_duckdb_dot_db_suffix_treated_as_file(tmp_path):
+    """When path ends in .db, treat it as a file path — don't append /chunks.db (#215)."""
+    db_file = tmp_path / "mydata.db"
+    config = DatabaseConfig(path=db_file, provider="duckdb")
+    actual_path = config.get_db_path()
+
+    assert actual_path == db_file
+    assert actual_path.name == "mydata.db"
+    # Parent dir should be created, but path itself should NOT be a directory
+    assert tmp_path.exists()
+    assert not db_file.exists() or db_file.is_file()
+
+
+def test_get_db_path_duckdb_dot_db_nested_path(tmp_path):
+    """Deeply nested .db path creates parent dirs, not the .db as a dir (#215)."""
+    db_file = tmp_path / "a" / "b" / "chunks.db"
+    config = DatabaseConfig(path=db_file, provider="duckdb")
+    actual_path = config.get_db_path()
+
+    assert actual_path == db_file
+    assert (tmp_path / "a" / "b").is_dir()
+    assert not db_file.exists()  # file not created yet, just parent dirs
+
+
+def test_get_db_path_must_exist_raises_when_missing(tmp_path):
+    """must_exist=True raises FileNotFoundError for missing DB (#226)."""
+    test_db_path = tmp_path / "nonexistent"
+    config = DatabaseConfig(path=test_db_path, provider="duckdb")
+
+    with pytest.raises(FileNotFoundError, match="Database not found"):
+        config.get_db_path(must_exist=True)
+
+
+def test_get_db_path_must_exist_ok_when_present(tmp_path):
+    """must_exist=True succeeds when the DB file exists."""
+    test_db_path = tmp_path / "existing"
+    test_db_path.mkdir()
+    db_file = test_db_path / "chunks.db"
+    db_file.touch()
+
+    config = DatabaseConfig(path=test_db_path, provider="duckdb")
+    actual_path = config.get_db_path(must_exist=True)
+    assert actual_path == db_file
+
+
+def test_get_db_path_must_exist_with_dot_db_suffix(tmp_path):
+    """must_exist=True works with .db suffix paths (#215 + #226)."""
+    db_file = tmp_path / "chunks.db"
+    config = DatabaseConfig(path=db_file, provider="duckdb")
+
+    # Missing — should raise
+    with pytest.raises(FileNotFoundError, match="Database not found"):
+        config.get_db_path(must_exist=True)
+
+    # Create the file — should succeed
+    db_file.touch()
+    assert config.get_db_path(must_exist=True) == db_file
+
+
 def test_lancedb_path_transformation_matches_provider(tmp_path):
     """Verify DatabaseConfig path transformation matches what LanceDBProvider expects.
 

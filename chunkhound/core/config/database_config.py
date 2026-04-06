@@ -33,20 +33,29 @@ class DatabaseConfig(BaseModel):
     # LanceDB-specific settings
     lancedb_index_type: Literal["auto", "ivf_hnsw_sq", "ivf_rq"] | None = Field(
         default=None,
-        description="LanceDB vector index type: auto (default), ivf_hnsw_sq, or ivf_rq (requires 0.25.3+)",
+        description=(
+            "LanceDB vector index type: auto (default),"
+            " ivf_hnsw_sq, or ivf_rq (requires 0.25.3+)"
+        ),
     )
 
     lancedb_optimize_fragment_threshold: int = Field(
         default=100,
         ge=0,
-        description="Minimum fragment count to trigger optimization (0 = always optimize, 50 = aggressive, 100 = balanced, 500 = conservative)",
+        description=(
+            "Minimum fragment count to trigger optimization"
+            " (0 = always, 50 = aggressive,"
+            " 100 = balanced, 500 = conservative)"
+        ),
     )
 
     # Disk usage limits
     max_disk_usage_mb: float | None = Field(
         default=None,
         ge=0.0,
-        description="Maximum database size in MB before indexing is stopped (None = no limit)",
+        description=(
+            "Maximum database size in MB before indexing is stopped (None = no limit)"
+        ),
     )
 
     @field_validator("path")
@@ -64,7 +73,7 @@ class DatabaseConfig(BaseModel):
             raise ValueError(f"Invalid provider: {v}. Must be one of {valid_providers}")
         return v
 
-    def get_db_path(self) -> Path:
+    def get_db_path(self, must_exist: bool = False) -> Path:
         """Get the actual database location for the configured provider.
 
         Returns the final path used by the provider, including all
@@ -73,39 +82,54 @@ class DatabaseConfig(BaseModel):
         - LanceDB: path/lancedb.lancedb/ (directory with .lancedb suffix)
 
         This is the authoritative source for database location checks.
+
+        Args:
+            must_exist: If True, raise FileNotFoundError when the resolved
+                database path doesn't exist. Use for search/query operations
+                to prevent silent zero-result failures (#226).
         """
         if self.path is None:
             raise ValueError("Database path not configured")
 
-        # Skip directory creation for in-memory databases (":memory:" is invalid on Windows)
+        # Skip directory creation for in-memory databases
+        # (":memory:" is invalid on Windows)
         is_memory = str(self.path) == ":memory:"
 
-        # Backwards-compatible handling:
-        # - Older ChunkHound versions used `database.path` as the direct DuckDB
-        #   file location (for example, `.chunkhound/db` as a file).
-        # - Newer versions treat `database.path` as a directory and store the
-        #   DuckDB file as `path/chunks.db`.
-        #
-        # When the configured path already exists as a file, we treat it as a
-        # legacy DuckDB database file and return it directly instead of trying
-        # to create a directory at that location.
         if self.provider == "duckdb" and not is_memory:
-            if self.path.exists() and self.path.is_file():
-                return self.path
-
-        if not is_memory:
-            # For directory-style layouts, ensure the base path exists.
+            # When the path ends in .db, treat it as a direct file path (#215).
+            # Without this check, "chunks.db" would be treated as a directory
+            # and the DB created inside it as chunks.db/chunks.db.
+            if self.path.suffix == ".db":
+                self.path.parent.mkdir(parents=True, exist_ok=True)
+                resolved = self.path
+            # Backwards-compatible handling:
+            # Older ChunkHound versions used `database.path` as the direct DuckDB
+            # file location (for example, `.chunkhound/db` as a file).
+            # When the configured path already exists as a file, treat it as a
+            # legacy DuckDB database and return it directly.
+            elif self.path.exists() and self.path.is_file():
+                resolved = self.path
+            else:
+                self.path.mkdir(parents=True, exist_ok=True)
+                resolved = self.path / "chunks.db"
+        elif self.provider == "lancedb" and not is_memory:
             self.path.mkdir(parents=True, exist_ok=True)
-
-        if self.provider == "duckdb":
-            return self.path if is_memory else self.path / "chunks.db"
-        elif self.provider == "lancedb":
             # LanceDB adds .lancedb suffix to prevent naming collisions
             # and clarify storage structure (see lancedb_provider.py:111-113)
             lancedb_base = self.path / "lancedb"
-            return lancedb_base.parent / f"{lancedb_base.stem}.lancedb"
+            resolved = lancedb_base.parent / f"{lancedb_base.stem}.lancedb"
+        elif is_memory:
+            resolved = self.path
         else:
             raise ValueError(f"Unknown database provider: {self.provider}")
+
+        if must_exist and not is_memory and not resolved.exists():
+            raise FileNotFoundError(
+                f"Database not found at {resolved}. "
+                f"Run 'chunkhound index <directory>' to create the database first."
+            )
+
+        return resolved
 
     def is_configured(self) -> bool:
         """Check if database is properly configured."""
