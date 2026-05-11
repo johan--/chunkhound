@@ -100,9 +100,10 @@ PyPI trusted publisher required for `release-rc.yml`:
 - **Preferred: pass project directory as positional arg** — `chunkhound search "query" /path/to/project` — this reads `.chunkhound.json` and resolves the DB correctly
 - **For MCP:** `chunkhound mcp --db /path/to/project/.chunkhound` (the path from `.chunkhound.json`'s `database.path`)
 - **`--db` with wrong subpath silently returns 0 results** — no error, just empty. Always verify with a regex search first.
-- Default DB path: `.chunkhound/db/chunks.db` (directory structure, not flat file)
-- When using `--db` flag, pass the **directory** path (e.g. `--db .chunkhound/db`), not the full file path — passing `--db .../chunks.db` creates a nested `chunks.db/chunks.db` directory
-- Old-style flat `.chunkhound` files (pre-v4) block directory creation — move aside before re-indexing
+- **Actual DB layout:** `<dir-you-passed>/chunks.db` (flat DuckDB file) + `<dir-you-passed>/chunks.db.root.json` (sidecar). The `db/` subdirectory does **not** exist by default — older docs/handovers that reference `.chunkhound/db/chunks.db` are stale.
+- When using `--db` flag, pass the **parent directory** for the DB (e.g. `--db /abs/path/to/project/.chunkhound`) — ChunkHound writes `chunks.db` inside it. Do NOT pass the file path itself (`--db .../chunks.db` creates a nested `chunks.db/chunks.db` directory).
+- `database.path` in `.chunkhound.json` follows the same rule — point it at the directory (`/abs/path/to/project/.chunkhound`), not at the `chunks.db` file
+- Old-style flat `.chunkhound` files (pre-v4) — where `.chunkhound` itself is a file, not a directory — block directory creation. Move aside before re-indexing.
 - Project-local `.chunkhound.json` with relative `"path": ".chunkhound"` resolves to CWD, not the project dir — use `--db` with absolute paths when indexing remote projects
 - `--config` does NOT override a project-local `.chunkhound.json` for DB path — always use explicit `--db` when the target project has its own config
 
