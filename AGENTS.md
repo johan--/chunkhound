@@ -97,15 +97,18 @@ PyPI trusted publisher required for `release-rc.yml`:
 - Environment: `pypi`
 
 ## DB_PATH_GOTCHAS
-- **Preferred: pass project directory as positional arg** — `chunkhound search "query" /path/to/project` — this reads `.chunkhound.json` and resolves the DB correctly
-- **For MCP:** `chunkhound mcp --db /path/to/project/.chunkhound` (the path from `.chunkhound.json`'s `database.path`)
-- **`--db` with wrong subpath silently returns 0 results** — no error, just empty. Always verify with a regex search first.
-- **Actual DB layout:** `<dir-you-passed>/chunks.db` (flat DuckDB file) + `<dir-you-passed>/chunks.db.root.json` (sidecar). The `db/` subdirectory does **not** exist by default — older docs/handovers that reference `.chunkhound/db/chunks.db` are stale.
-- When using `--db` flag, pass the **parent directory** for the DB (e.g. `--db /abs/path/to/project/.chunkhound`) — ChunkHound writes `chunks.db` inside it. Do NOT pass the file path itself (`--db .../chunks.db` creates a nested `chunks.db/chunks.db` directory).
-- `database.path` in `.chunkhound.json` follows the same rule — point it at the directory (`/abs/path/to/project/.chunkhound`), not at the `chunks.db` file
-- Old-style flat `.chunkhound` files (pre-v4) — where `.chunkhound` itself is a file, not a directory — block directory creation. Move aside before re-indexing.
-- Project-local `.chunkhound.json` with relative `"path": ".chunkhound"` resolves to CWD, not the project dir — use `--db` with absolute paths when indexing remote projects
-- `--config` does NOT override a project-local `.chunkhound.json` for DB path — always use explicit `--db` when the target project has its own config
+- **Preferred: pass project directory as positional arg** — `chunkhound search "query" /path/to/project` reads `.chunkhound.json` and resolves the DB correctly.
+- **For MCP:** pass the project path positionally too (`chunkhound mcp /path/to/project`) so cwd doesn't matter. Add `--db <db-dir>` only when overriding the configured location.
+- **`--db` with the wrong subpath silently returns 0 results** — no error, just empty. Always verify with a regex search first.
+- **Two valid v5 DB layouts, driven by config:**
+  - With `database.path` set in `.chunkhound.json` → chunkhound writes `<path>/chunks.db` (flat at that directory) + `<path>/chunks.db.root.json` sidecar.
+  - Without `database.path` → defaults to `<project>/.chunkhound/db/chunks.db` (nested) + sidecar at the same place.
+- **Indexed-root pinning:** the sidecar `chunks.db.root.json` records the project root at first write. Re-opening under a different root fails with `DuckDBIndexedRootMismatchError`. Pass the project root explicitly (positional arg) or run with cwd = project root.
+- **`--db` always points at the DB *directory*, never the file** — passing `.../chunks.db` creates a nested `chunks.db/chunks.db`.
+- **Config layering is `_deep_merge`:** `--config`/`CHUNKHOUND_CONFIG_FILE` is the base, project-local `.chunkhound.json` deep-merges on top per-field, env vars on top of that, CLI args win. A tiny per-project file (only `database.path` + project excludes) can inherit providers/models from a global defaults file — they merge, they don't replace.
+- **Relative `path: ".chunkhound"` in `.chunkhound.json` resolves against CWD, not the project dir** — use absolute paths.
+- **Pre-v4 flat-*file* `.chunkhound`** (where `.chunkhound` itself is a file, not a directory) blocks directory creation. Move aside before re-indexing.
+- **Bloat baseline:** v5 indexes are ~250–300× source size (768-dim embeddings + HNSW + chunk-per-symbol granularity). 1 MB source → ~300 MB DB; plan disk accordingly.
 
 ## PROJECT_MAINTENANCE
 - Smoke tests are mandatory guardrails
