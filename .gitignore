@@ -269,6 +269,7 @@ debug_test_file.py
 
 # Claude
 .claude/settings.local.json
+.claude/scheduled_tasks.lock
 
 # ChunkHound project config (may contain API keys)
 .chunkhound.json
@@ -298,6 +299,7 @@ cluster_eval.json
 
 # Temporary documentation
 .tmp-docs/
+docs/superpowers
 
 # AI review artifacts
 .gitignored/
@@ -328,3 +330,7 @@ site/public/og-image-light.png
 
 # Gemini-CLI
 .gemini/settings.json
+
+# AI review artifacts (from PR reviews, agent task plans)
+plan.txt
+AGENT_REVIEW.md

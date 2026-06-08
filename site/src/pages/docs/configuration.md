@@ -155,8 +155,9 @@ The LLM provider is used for deep code research (`chunkhound research` and the `
 | OpenCode CLI | `opencode-cli` | -- | `opencode/grok-code` | `opencode/grok-code` | Uses local OpenCode CLI installation |
 | Anthropic | `anthropic` | `CHUNKHOUND_LLM_API_KEY` | `claude-haiku-4-5-20251001` | `claude-sonnet-4-5-20250929` | Direct API access |
 | OpenAI | `openai` | `CHUNKHOUND_LLM_API_KEY` | `gpt-5-nano` | `gpt-5` | Direct API access |
-| Gemini | `gemini` | `CHUNKHOUND_LLM_API_KEY` | `gemini-3-pro-preview` | `gemini-3-pro-preview` | Google Gemini API |
-| Grok | `grok` | `CHUNKHOUND_LLM_API_KEY` | `grok-4-1-fast-reasoning` | `grok-4-1-fast-reasoning` | xAI API |
+| Gemini | `gemini` | `CHUNKHOUND_LLM_API_KEY` | Must be set explicitly via `CHUNKHOUND_LLM_MODEL` or `llm.model` (configurator defaults to `gemini-3.5-flash`) | Must be set explicitly via `CHUNKHOUND_LLM_MODEL` or `llm.model` (configurator defaults to `gemini-3.5-flash`) | Google Gemini API. Migration: `CHUNKHOUND_GEMINI_MODEL` was removed in v4.x — rename to `CHUNKHOUND_LLM_MODEL`. |
+| Grok | `grok` | `CHUNKHOUND_LLM_API_KEY` | Must be set explicitly (configurator defaults to `grok-4.3`) | Must be set explicitly (configurator defaults to `grok-4.3`) | xAI API. Registry providers require explicit `model`. |
+| DeepSeek | `deepseek` | `CHUNKHOUND_LLM_API_KEY` | Must be set explicitly (configurator defaults to `deepseek-v4-flash`) | Must be set explicitly (configurator defaults to `deepseek-v4-flash`) | DeepSeek API. Registry providers require explicit `model`. |
 
 `"model"` is a convenience shorthand that sets both `utility_model` and `synthesis_model` to the same value. To use different models per role, set `utility_model` and `synthesis_model` explicitly.
 
@@ -176,12 +177,35 @@ When an OpenAI-compatible LLM provider points at a custom `base_url`, ChunkHound
 
 ### Anthropic-specific Options
 
+These apply when the active provider (or a role provider) is `anthropic`. Each option also has a matching `CHUNKHOUND_LLM_ANTHROPIC_<OPTION>` environment variable (single underscore, uppercased).
+
 | Option | Type | Default | Description |
 |---|---|---|---|
-| `anthropic_thinking_enabled` | `boolean` | `false` | Enable extended thinking |
-| `anthropic_thinking_budget_tokens` | `number` | `10000` | Token budget for thinking (min 1024) |
-| `anthropic_interleaved_thinking` | `boolean` | `false` | Interleaved thinking for tool use (Claude 4+) |
-| `anthropic_effort` | `string` | `null` | Effort parameter: `low`, `medium`, `high` |
+| `anthropic_thinking_enabled` | `boolean` | `false` | Enable extended thinking. |
+| `anthropic_thinking_mode` | `string` | `null` | `auto` (default when unset), `off`, `manual`, or `adaptive`. `auto` selects adaptive on Opus 4.6+/Sonnet 4.6 and manual on older models. |
+| `anthropic_thinking_budget_tokens` | `number` | `10000` | Manual-mode thinking budget (min 1024). Ignored in adaptive mode (Opus 4.6+). |
+| `anthropic_thinking_display` | `string` | `null` | Adaptive-mode thinking text: `summarized` or `omitted`. Opus 4.7/4.8 omit by default. |
+| `anthropic_interleaved_thinking` | `boolean` | `false` | Manual-mode interleaved thinking between tool calls. Auto-enabled in adaptive mode. |
+| `anthropic_effort` | `string` | `null` | Token-usage effort: `low`, `medium`, `high`, `xhigh`, `max`. `xhigh` is Opus 4.7/4.8 only; `max` is Opus 4.6+. Unsupported levels are dropped with a warning. |
+| `anthropic_task_budget_tokens` | `number` | `null` | Advisory agentic-loop token budget (beta). Opus 4.7/4.8 only; minimum 20000. |
+| `anthropic_prompt_caching` | `boolean` | `false` | Send `cache_control` so the Messages API can cache prompt prefixes. |
+| `anthropic_cache_ttl` | `string` | `null` | Prompt-cache TTL such as `1h`. `null` uses the API default of 5 minutes. |
+| `anthropic_context_management_enabled` | `boolean` | `false` | Automatic clearing of tool results and thinking blocks (beta). |
+| `anthropic_clear_thinking_keep_turns` | `number` | `null` | Thinking turns to keep when context management clears them. `null` keeps all. |
+| `anthropic_clear_tool_uses_trigger_tokens` | `number` | `null` | Input-token threshold that triggers tool-result clearing. |
+| `anthropic_clear_tool_uses_keep` | `number` | `null` | Number of recent tool-use pairs to keep after clearing. |
+
+### Gemini-specific Options
+
+These apply when the active provider (or a role provider) is `gemini`. Matching environment variables use the `CHUNKHOUND_LLM_GEMINI_*` prefix, and the CLI exposes `--llm-gemini-thinking-level` / `--llm-gemini-thinking-budget`.
+
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `gemini_thinking_level` | `string` | `null` | Adaptive thinking depth for Gemini 3+ models. Allowed values: `low`, `medium`, `high`. Forwarded to the Google Gen AI SDK as `thinking_level`. |
+| `gemini_thinking_budget` | `number` | `null` | Fixed thinking token budget for Gemini 2.5+ models. Forwarded to the Google Gen AI SDK as `thinking_budget`. |
+
+Both options can be set independently — `thinking_level` controls adaptive depth (Gemini 3+), while `thinking_budget` sets a fixed token cap (Gemini 2.5+).
+If both are unset, ChunkHound sends no Gemini thinking config and the model uses its own defaults.
 
 ## Research Configuration
 
@@ -195,6 +219,7 @@ Controls the `code_research` MCP tool and `chunkhound research` command.
 | `multi_hop_result_limit` | `number` | `500` | `CHUNKHOUND_RESEARCH_MULTI_HOP_RESULT_LIMIT` | Max accumulated chunks |
 | `target_tokens` | `number` | `20000` | `CHUNKHOUND_RESEARCH_TARGET_TOKENS` | Output token budget for synthesis |
 | `query_expansion_enabled` | `bool` | `true` | `CHUNKHOUND_RESEARCH_QUERY_EXPANSION_ENABLED` | LLM-based query expansion |
+| `depth_exploration_max_completion_tokens` | `number` | `10000` | `CHUNKHOUND_RESEARCH_DEPTH_EXPLORATION_MAX_COMPLETION_TOKENS` | Completion/reasoning token budget for depth exploration query generation |
 | `relevance_threshold` | `number` | `0.5` | `CHUNKHOUND_RESEARCH_RELEVANCE_THRESHOLD` | Min rerank score for inclusion |
 
 ```json
@@ -204,6 +229,7 @@ Controls the `code_research` MCP tool and `chunkhound research` command.
     "exhaustive_mode": false,
     "target_tokens": 20000,
     "query_expansion_enabled": true,
+    "depth_exploration_max_completion_tokens": 10000,
     "relevance_threshold": 0.5
   }
 }
@@ -247,11 +273,14 @@ Most environment variables use the `CHUNKHOUND_` prefix with `__` (double unders
 | `CHUNKHOUND_DATABASE__PROVIDER` | Database backend (`duckdb` or `lancedb`) |
 | `CHUNKHOUND_DATABASE__PATH` | Database storage path |
 | `CHUNKHOUND_LLM_PROVIDER` | LLM provider for research |
+| `CHUNKHOUND_LLM_MODEL` | LLM model shorthand that sets both utility and synthesis roles |
 | `CHUNKHOUND_LLM_UTILITY_MODEL` | LLM model for utility tasks (fast, lower cost) |
 | `CHUNKHOUND_LLM_SYNTHESIS_MODEL` | LLM model for synthesis tasks (primary output) |
 | `CHUNKHOUND_LLM_API_KEY` | API key for LLM provider |
 | `CHUNKHOUND_LLM_BASE_URL` | Base URL for LLM provider (proxy / custom endpoint) |
 | `CHUNKHOUND_LLM_SSL_VERIFY` | Verify TLS certificates for requests sent to `llm.base_url` |
+| `CHUNKHOUND_LLM_GEMINI_THINKING_LEVEL` | Gemini thinking depth (`low`, `medium`, `high`) |
+| `CHUNKHOUND_LLM_GEMINI_THINKING_BUDGET` | Gemini fixed thinking token budget |
 | `CHUNKHOUND_INDEXING__EXCLUDE_MODE` | Exclusion mode (`combined`, `config_only`, `gitignore_only`) |
 | `CHUNKHOUND_INDEXING__PER_FILE_TIMEOUT_SECONDS` | Per-file parse timeout |
 | `CHUNKHOUND_INDEXING__DETECT_EMBEDDED_SQL` | Enable embedded SQL detection |
