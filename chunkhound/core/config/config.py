@@ -380,8 +380,15 @@ class Config(BaseModel):
             start_path = self.target_dir
             project_root = find_project_root(start_path)
 
-            # Set default database path in project root
-            self.database.path = project_root / ".chunkhound" / "db"
+            # fork: when CHUNKHOUND_DB_ROOT is set, default the database out of
+            # the working tree to <root>/<project-name> so repos never get an
+            # in-tree .chunkhound/ folder. Unset == upstream in-tree default.
+            db_root = os.getenv("CHUNKHOUND_DB_ROOT")
+            if db_root:
+                self.database.path = Path(db_root).expanduser() / project_root.name
+            else:
+                # Set default database path in project root
+                self.database.path = project_root / ".chunkhound" / "db"
 
         # Ensure database path is resolved to canonical form (handles symlinks)
         if self.database.path:

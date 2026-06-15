@@ -45,19 +45,28 @@ def find_project_root(start_path: Path | None = None) -> Path:
     current = Path.cwd()
     home = Path.home()
 
+    # fork: when CHUNKHOUND_REQUIRE_PROJECT_CONFIG is truthy, only an explicit
+    # .chunkhound.json opts a directory in as a ChunkHound project. This stops
+    # the MCP server from auto-claiming (and indexing) any git repo a session
+    # happens to open. Unset/falsey == upstream behavior.
+    require_config = os.getenv(
+        "CHUNKHOUND_REQUIRE_PROJECT_CONFIG", ""
+    ).strip().lower() not in ("", "0", "false", "no")
+
     # Walk up to filesystem root (but stop at home directory for safety)
     while current != current.parent and current != home:
         # Priority 1: Explicit .chunkhound.json marker
         if (current / ".chunkhound.json").exists():
             return current
 
-        # Priority 2: Existing database directory
-        if (current / ".chunkhound" / "db").exists():
-            return current
+        if not require_config:
+            # Priority 2: Existing database directory
+            if (current / ".chunkhound" / "db").exists():
+                return current
 
-        # Priority 3: Git repository root
-        if (current / ".git").exists():
-            return current
+            # Priority 3: Git repository root
+            if (current / ".git").exists():
+                return current
 
         current = current.parent
 
