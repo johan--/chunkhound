@@ -354,6 +354,7 @@ class TestIssue277UnknownExtensions:
             (".properties", "Java properties files"),
             (".conf", "Generic config files"),
             (".cfg", "Generic config files (alt extension)"),
+            (".haml", "HAML templates (text fallback)"),
         ],
     )
     def test_common_text_extensions_indexed(self, ext, description):
@@ -398,6 +399,7 @@ class TestIssue277UnknownExtensions:
             ("test.properties", "Java properties"),
             ("test.conf", "Config file"),
             ("test.cfg", "Config file alt"),
+            ("test.haml", "HAML template"),
             ("Dockerfile", "Docker"),
             ("Jenkinsfile", "Jenkinsfile"),
         ],
