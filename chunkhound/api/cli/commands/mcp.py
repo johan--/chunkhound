@@ -84,9 +84,23 @@ async def mcp_command(args: argparse.Namespace, config) -> None:
         # Proxy path: find/start daemon, then bridge stdio ↔ socket
         from chunkhound.daemon.client_proxy import ClientProxy
 
-        project_dir = Path(getattr(args, "path", ".")).resolve()
+        project_dir = _resolve_project_dir(args, config)
         proxy = ClientProxy(project_dir, args)
         await proxy.run()
+
+
+def _resolve_project_dir(args: argparse.Namespace, config) -> Path:
+    """Resolve the daemon's project directory for the MCP server.
+
+    An explicit positional path always wins (deliberate user intent). When
+    absent, fall back to the config's target_dir, which was resolved through
+    the require-config-gated project detection - NOT a bare cwd default, which
+    would let the MCP server auto-claim and index any session's working tree.
+    """
+    explicit = getattr(args, "path", None)
+    if explicit is not None:
+        return Path(explicit).resolve()
+    return Path(config.target_dir).resolve()
 
 
 def _show_mcp_setup_instructions(

@@ -1,0 +1,19 @@
+{
+  "database": {
+    "path": "/home/johan/workbench/chunkhound-dbs/chunkhound"
+  },
+  "indexing": {
+    "exclude": [
+      "**/__pycache__/**",
+      "**/.venv/**",
+      "**/.pytest_cache/**",
+      "**/.mypy_cache/**",
+      "**/.ruff_cache/**",
+      "**/dist/**",
+      "**/build/**",
+      "**/htmlcov/**",
+      "**/node_modules/**",
+      "tests/fixtures/real/html/python-docs.html"
+    ]
+  }
+}
