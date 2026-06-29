@@ -85,3 +85,72 @@ def test_default_db_in_tree_when_db_root_unset(tmp_path, monkeypatch):
     cfg = Config(target_dir=project)
 
     assert cfg.database.path == (project / ".chunkhound" / "db").resolve()
+
+
+# --- MCP server must honor the opt-in gate too ----------------------------
+#
+# Regression guard: the `chunkhound mcp` positional path used to default to
+# Path("."), and that non-None value bypassed the require-config walk-up (a
+# non-None start_path is used verbatim by find_project_root). The MCP server
+# therefore auto-claimed and indexed any session's cwd, opted in or not. The
+# fix is to default the positional to None so the gated detection runs, and to
+# resolve an absent path from the already-gated config.target_dir.
+
+
+def test_mcp_command_without_path_honors_require_config(tmp_path, monkeypatch):
+    """`chunkhound mcp` with no positional path in a bare git repo must NOT
+    claim cwd when require-config is set - same gate the CLI walk-up uses."""
+    from chunkhound.api.cli.main import create_parser
+
+    (tmp_path / ".git").mkdir()
+    monkeypatch.setenv("CHUNKHOUND_REQUIRE_PROJECT_CONFIG", "1")
+    monkeypatch.setattr(Path, "home", lambda: tmp_path.parent)
+    monkeypatch.chdir(tmp_path)
+
+    args = create_parser().parse_args(["mcp"])
+    # Mirrors Config's project-root resolution: the MCP command must feed
+    # None (not a cwd default) so the gated walk-up runs and refuses.
+    with pytest.raises(SystemExit):
+        find_project_root(getattr(args, "path", None))
+
+
+def test_mcp_resolves_to_gated_target_dir_when_no_path(tmp_path, monkeypatch):
+    """With no positional path, the MCP command resolves the daemon's project
+    dir from the config's already-gated target_dir, never a raw cwd default."""
+    from types import SimpleNamespace
+
+    from chunkhound.api.cli.commands.mcp import _resolve_project_dir
+
+    project = tmp_path / "myproj"
+    project.mkdir()
+    (project / ".chunkhound.json").write_text("{}")
+    monkeypatch.delenv("CHUNKHOUND_DB_ROOT", raising=False)
+    monkeypatch.delenv("CHUNKHOUND_CONFIG_FILE", raising=False)
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+
+    cfg = Config(target_dir=project)
+    args = SimpleNamespace(path=None)
+
+    assert _resolve_project_dir(args, cfg) == project.resolve()
+
+
+def test_mcp_explicit_path_overrides_config(tmp_path, monkeypatch):
+    """An explicit positional path always wins (user intent), even under
+    require-config - the bypass for deliberate paths stays intact."""
+    from types import SimpleNamespace
+
+    from chunkhound.api.cli.commands.mcp import _resolve_project_dir
+
+    project = tmp_path / "myproj"
+    project.mkdir()
+    (project / ".chunkhound.json").write_text("{}")
+    monkeypatch.delenv("CHUNKHOUND_DB_ROOT", raising=False)
+    monkeypatch.delenv("CHUNKHOUND_CONFIG_FILE", raising=False)
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+
+    cfg = Config(target_dir=project)
+    explicit = tmp_path / "explicit"
+    explicit.mkdir()
+    args = SimpleNamespace(path=explicit)
+
+    assert _resolve_project_dir(args, cfg) == explicit.resolve()

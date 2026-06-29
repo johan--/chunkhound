@@ -22,13 +22,16 @@ def add_mcp_subparser(subparsers: Any) -> argparse.ArgumentParser:
         description="Start the MCP server for integration with MCP-compatible clients",
     )
 
-    # Optional positional argument with default to current directory
+    # Optional positional argument. Defaults to None (not Path(".")) so that an
+    # absent path runs the gated project detection (honoring
+    # CHUNKHOUND_REQUIRE_PROJECT_CONFIG) instead of bypassing it by passing a
+    # cwd value straight to find_project_root. An explicit path still wins.
     mcp_parser.add_argument(
         "path",
         nargs="?",
         type=Path,
-        default=Path("."),
-        help="Directory path to index (default: current directory)",
+        default=None,
+        help="Directory path to index (default: auto-detected project root)",
     )
 
     # Daemon mode control

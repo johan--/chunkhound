@@ -76,6 +76,7 @@ from chunkhound.parsers.mappings import (
     PHPMapping,
     PowerShellMapping,
     PythonMapping,
+    RubyMapping,
     RustMapping,
     ScssMapping,
     SqlMapping,
@@ -100,6 +101,7 @@ _swift_lang = _get_lang("swift")
 _yaml_lang = _get_lang("yaml")
 _hcl_lang = _get_lang("hcl")
 _dart_lang = _get_lang("dart")
+_ruby_lang = _get_lang("ruby")
 _powershell_lang = _get_lang("powershell")
 
 
@@ -119,6 +121,7 @@ ts_swift = _LanguagePackWrapper(_swift_lang)
 ts_yaml = _LanguagePackWrapper(_yaml_lang)
 ts_hcl = _LanguagePackWrapper(_hcl_lang)
 ts_dart = _LanguagePackWrapper(_dart_lang)
+ts_ruby = _LanguagePackWrapper(_ruby_lang)
 ts_powershell = _LanguagePackWrapper(_powershell_lang)
 
 _scss_lang = _get_lang("scss")
@@ -237,6 +240,7 @@ LANGUAGE_CONFIGS: dict[Language, LanguageConfig] = {
     ),
     # Haskell (required dependency in pyproject.toml)
     Language.ELIXIR: LanguageConfig(ts_elixir, ElixirMapping, True, "elixir"),
+    Language.RUBY: LanguageConfig(ts_ruby, RubyMapping, True, "ruby"),
     Language.HASKELL: LanguageConfig(ts_haskell, HaskellMapping, True, "haskell"),
     Language.HCL: LanguageConfig(ts_hcl, HclMapping, True, "hcl"),
     # Language pack languages (required via tree-sitter-language-pack)
@@ -345,6 +349,14 @@ EXTENSION_TO_LANGUAGE: dict[str, Language] = {
     # Elixir
     ".ex": Language.ELIXIR,
     ".exs": Language.ELIXIR,
+    # Ruby
+    ".rb": Language.RUBY,
+    ".rake": Language.RUBY,
+    ".gemspec": Language.RUBY,
+    "Gemfile": Language.RUBY,
+    "gemfile": Language.RUBY,
+    "Rakefile": Language.RUBY,
+    "rakefile": Language.RUBY,
     ".mm": Language.OBJC,
     # PHP
     ".php": Language.PHP,
@@ -397,6 +409,9 @@ EXTENSION_TO_LANGUAGE: dict[str, Language] = {
     # .sass uses indented syntax (no braces/semicolons) which is structurally
     # incompatible with the tree-sitter SCSS grammar — fall back to text parser.
     ".sass": Language.TEXT,
+    # .haml has no bundled tree-sitter grammar; fall back to the text parser so
+    # files are indexed and searchable rather than silently skipped.
+    ".haml": Language.TEXT,
     ".make": Language.MAKEFILE,
     # Text files (fallback)
     ".txt": Language.TEXT,

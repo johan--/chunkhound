@@ -183,6 +183,7 @@ class Language(Enum):
     SWIFT = "swift"
     DART = "dart"
     ELIXIR = "elixir"
+    RUBY = "ruby"
     LUA = "lua"
     POWERSHELL = "powershell"
     TWINCAT = "twincat"
@@ -226,6 +227,8 @@ class Language(Enum):
             "gnumakefile": cls.MAKEFILE,
             "dockerfile": cls.TEXT,
             "jenkinsfile": cls.TEXT,
+            "gemfile": cls.RUBY,
+            "rakefile": cls.RUBY,
         }
 
         if basename in filename_map:
@@ -311,6 +314,9 @@ class Language(Enum):
             ".swiftinterface": cls.SWIFT,
             ".ex": cls.ELIXIR,
             ".exs": cls.ELIXIR,
+            ".rb": cls.RUBY,
+            ".rake": cls.RUBY,
+            ".gemspec": cls.RUBY,
             ".lua": cls.LUA,
             ".ps1": cls.POWERSHELL,
             ".psm1": cls.POWERSHELL,
@@ -324,6 +330,10 @@ class Language(Enum):
             # Use text fallback parser instead of silently producing
             # misaligned / empty chunks.
             ".sass": cls.TEXT,
+            # .haml has no bundled tree-sitter grammar (absent from
+            # tree-sitter-language-pack); index as text so files are searchable
+            # rather than silently skipped, mirroring the .sass fallback.
+            ".haml": cls.TEXT,
             ".jinja": cls.JINJA,
             ".j2": cls.JINJA,
             ".njk": cls.JINJA,
@@ -383,6 +393,7 @@ class Language(Enum):
             Language.SWIFT,
             Language.DART,
             Language.ELIXIR,
+            Language.RUBY,
             Language.LUA,
             Language.POWERSHELL,
             Language.TWINCAT,
@@ -409,6 +420,7 @@ class Language(Enum):
             Language.SVELTE,
             Language.SWIFT,
             Language.DART,
+            Language.RUBY,
             Language.POWERSHELL,
         }
 
