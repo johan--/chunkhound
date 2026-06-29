@@ -183,6 +183,15 @@ LARGE_LANGUAGE_SAMPLES: dict[Language, tuple[str, str, str]] = {
         # Normal
         "class Calculator {\npublic:\n    int add(int a, int b) { return a + b; }\n};",
     ),
+    Language.METAL: (
+        ".metal",
+        # MSL is C++14; the C++ grammar chunks structs/classes
+        "class DataProcessor {\npublic:\n"
+        + _make_large_statements("    int field = 0;")
+        + "\n};",
+        # Normal
+        "class Calculator {\npublic:\n    int add(int a, int b) { return a + b; }\n};",
+    ),
     Language.HASKELL: (
         ".hs",
         # Large function with many let bindings
@@ -263,6 +272,17 @@ LARGE_LANGUAGE_SAMPLES: dict[Language, tuple[str, str, str]] = {
         + "\n  x\nend",
         # Normal
         'def greet(name)\n  "Hello, #{name}"\nend',
+    ),
+    Language.POWERSHELL: (
+        ".ps1",
+        # Large function
+        "function Get-Data {\n"
+        + _make_large_statements("    $x = 1")
+        + "\n    return $x\n}",
+        # Normal
+        'function Get-Greeting {\n'
+        '    param([string]$Name)\n'
+        '    return "Hello, $Name"\n}',
     ),
     Language.BASH: (
         ".sh",
