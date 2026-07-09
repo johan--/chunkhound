@@ -120,6 +120,25 @@ PyPI trusted publisher required for `release-rc.yml`:
 - **Pre-v4 flat-*file* `.chunkhound`** (where `.chunkhound` itself is a file, not a directory) blocks directory creation. Move aside before re-indexing.
 - **Bloat baseline:** v5 indexes are ~250–300× source size (768-dim embeddings + HNSW + chunk-per-symbol granularity). 1 MB source → ~300 MB DB; plan disk accordingly.
 
+## RUST_RULES
+**NEVER:**
+- NEVER write `unsafe` code — `#![forbid(unsafe_code)]` is set at the crate root; the compiler will reject it
+- NEVER add `#[allow(clippy::...)]` without an inline comment explaining why
+- NEVER use `.unwrap()` at the PyO3 boundary — use `?` or `PyErr::new`; `.expect("reason")` is acceptable for truly-unreachable internal invariants
+- NEVER borrow `&str` across `py.allow_threads()` — convert to owned `String` before the GIL is released
+
+**ALWAYS:**
+- ALWAYS wrap CPU/IO-bound work in `py.allow_threads(|| { ... })` to release the GIL during Rust execution
+- ALWAYS run `cargo fmt` and `cargo clippy --all-targets -- -D warnings` before committing Rust changes (`make rust-check`)
+- ALWAYS run `cargo test` after Rust changes (`make rust-test`)
+- ALWAYS use owned types (`String`, `Vec<T>`) at the `allow_threads` boundary
+
+## RUST_COMMANDS
+```bash
+rust-check: make rust-check   # cargo fmt --check + clippy -D warnings
+rust-test:  make rust-test    # cargo test
+```
+
 ## PROJECT_MAINTENANCE
 - Smoke tests are mandatory guardrails
 - Run `uv run mypy chunkhound` during reviews to catch Optional/type boundary issues

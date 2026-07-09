@@ -93,10 +93,23 @@ class Tool:
     requires_embeddings: bool = False
     requires_llm: bool = False
     requires_reranker: bool = False
+    requires_db: bool = False
 
 
 # Tool registry - populated by @register_tool decorator
 TOOL_REGISTRY: dict[str, Tool] = {}
+
+
+def tool_requires_db(tool_name: str) -> bool:
+    """Return True when the tool implementation needs DB services.
+
+    This is the daemon/session boundary: non-DB tools must not trigger
+    provider reconnect/open work just because an MCP client called them.
+    """
+    tool = TOOL_REGISTRY.get(tool_name)
+    if tool is None:
+        return True  # Conservative: assume DB needed for unknown tools
+    return tool.requires_db
 
 
 def _python_type_to_json_schema_type(type_hint: Any) -> dict[str, Any]:
@@ -299,6 +312,7 @@ def register_tool(
             requires_embeddings=requires_embeddings,
             requires_llm=requires_llm,
             requires_reranker=requires_reranker,
+            requires_db="services" in inspect.signature(func).parameters,
         )
 
         return func
@@ -697,12 +711,13 @@ async def search_impl(
             path_filter=path,
         )
     else:  # regex
-        # Perform regex search
+        # Perform regex search; pass query so results are scored by cosine similarity
         results, pagination = await services.search_service.search_regex_async(
             pattern=query,
             page_size=page_size,
             offset=offset,
             path_filter=path,
+            query=query,
         )
 
     # Convert file paths to native platform format
@@ -843,8 +858,9 @@ async def websearch_impl(
         embedding_manager: Present solely for capability gating
             (requires_embeddings=True); signature-inspected by register_tool.
             Unused in the body — the research stage runs in a subprocess.
-        llm_manager: Present solely for capability gating (requires_llm=True);
-            signature-inspected by register_tool. Unused in the body.
+        llm_manager: Used to expand the user query into 3 DuckDuckGo-optimized
+            variants via the utility LLM. When None (no LLM configured), the
+            expander falls back to a single-query dispatch.
         config: Application configuration; falls back to environment. Its
             source file (if any) is forwarded to the subprocess as --config.
         query: Natural-language or keyword query for DuckDuckGo.
@@ -859,9 +875,10 @@ async def websearch_impl(
         build_quickresearch_argv_core,
         clamp_limit,
         fetch_and_save,
-        search,
+        search_multi,
         websearch_timeout,
     )
+    from chunkhound.utils.websearch_expansion import expand_web_queries
     from chunkhound.utils.websearch_postprocess import replace_paths_with_urls
 
     if config is None:
@@ -869,8 +886,9 @@ async def websearch_impl(
 
     limit = clamp_limit(limit)
 
+    queries = await expand_web_queries(query, llm_manager)
     try:
-        results = await asyncio.to_thread(search, query, limit, None)
+        results = await search_multi(queries, limit, None)
     except urllib.error.URLError as e:
         raise MCPError(f"Web search failed: {e.reason}") from e
     if not results:
@@ -889,7 +907,9 @@ async def websearch_impl(
             mapping=mapping,
         )
 
-        cmd = build_quickresearch_argv_core(query, tmpdir, config)
+        cmd = build_quickresearch_argv_core(
+            query, tmpdir, config, parent_pid=os.getpid()
+        )
         # Scrub CHUNKHOUND_MCP_MODE so the child's RichOutputFormatter.error()
         # is not silenced — we rely on its stderr output to populate the
         # MCPError tail on subprocess failure.
