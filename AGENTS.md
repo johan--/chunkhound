@@ -31,7 +31,7 @@ format:    uv run ruff format chunkhound
 # Running
 index:     uv run chunkhound index [directory]
 mcp_stdio: uv run chunkhound mcp
-mcp_http:  uv run chunkhound mcp http --port 5173
+mcp_http:  uv run chunkhound mcp --transport http --port 5173
 
 # Git diff search
 git_search: uv run chunkhound search "<query>" --last-n <N>
@@ -94,17 +94,23 @@ git push origin vX.Y.Za1
 # 4. Revert remote back to original
 git remote set-url origin "$ORIGINAL_REMOTE"
 
-# 5. Update uv.lock (only needed when chunkhound[native] extra is re-enabled)
+# 5. Update uv.lock — pyproject.toml only pins a floor version, so this must be
+#    bumped every release to pick up the version that was just published
 uv lock --upgrade-package chunkhound-native
 git add uv.lock
 git commit -m "chore: bump chunkhound-native in lockfile to vX.Y.Za1"
 ```
 
-PyPI trusted publisher required for `release-rc.yml`:
+PyPI trusted publisher required for `release-rc.yml` (on the `chunkhound` project):
 - Owner: `chunkhound`
 - Repository: `chunkhound`
 - Workflow: `release-rc.yml`
 - Environment: `pypi`
+
+This same tag push also publishes `chunkhound-native` via the `publish-rc-native` job, which needs
+its own trusted publisher registered on the **`chunkhound-native`** PyPI project (Workflow:
+`release-rc.yml`, Environment: `pypi-native`) — see `RELEASING.md` prerequisites for the full
+setup and the environment-scoping gotcha that causes a confusing `403` if it's misconfigured.
 
 ## DB_PATH_GOTCHAS
 - **Preferred: pass project directory as positional arg** — `chunkhound search "query" /path/to/project` reads `.chunkhound.json` and resolves the DB correctly.
@@ -137,6 +143,24 @@ PyPI trusted publisher required for `release-rc.yml`:
 ```bash
 rust-check: make rust-check   # cargo fmt --check + clippy -D warnings
 rust-test:  make rust-test    # cargo test
+
+# Build the native extension (required before running tests that import chunkhound_native)
+#
+# CI (has internet): DUCKDB_DOWNLOAD_LIB=1 downloads the precompiled shared library from GitHub.
+#   DUCKDB_DOWNLOAD_LIB=1 uv run maturin develop
+#
+# Local (no internet / air-gapped): reuse the static library compiled by a prior release build.
+#   The .a lives under target/release/build/libduckdb-sys-*/out/libduckdb.a — find it with:
+#     find target/release/build -name "libduckdb.a" | head -1
+#   Then build against it (symlink gives libduckdb-sys the name it expects):
+#     OUT=$(find "$(pwd)/target/release/build" -name "libduckdb.a" -printf "%h\n" | head -1)
+#     ln -sf "$OUT/libduckdb.a" "$OUT/libduckdb_static.a"
+#     DUCKDB_LIB_DIR="$OUT" DUCKDB_STATIC=1 RUSTFLAGS="-C link-arg=-lstdc++" uv run maturin develop --release
+#
+#   RUSTFLAGS note: -lstdc++ is required when statically linking DuckDB. The static
+#   .a includes C++ exception-handling code (__gxx_personality_v0) that lives in
+#   libstdc++.so. Without this flag the .so builds cleanly but fails at Python import
+#   with "undefined symbol: __gxx_personality_v0".
 ```
 
 ## PROJECT_MAINTENANCE
